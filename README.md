@@ -1,16 +1,23 @@
-# Portfolio → Reactive Resume Telegram Bot
+# Resume → Vacancy → Reactive Resume Telegram Bot
 
-Телеграм-бот: отправляете команду `/portfolio`, присылаете PDF-портфолио — бот
-распознаёт его через AI-парсер [Reactive Resume](https://rxresu.me) и создаёт
-готовое резюме в вашем аккаунте rxresu.me.
+Телеграм-бот: отправляете `/portfolio`, присылаете резюме (ссылку из
+[Reactive Resume](https://rxresu.me) или PDF), затем текст вакансии — бот
+адаптирует резюме под вакансию через LLM и загружает **новое** резюме в ваш
+аккаунт rxresu.me.
 
 ## Как это работает
 
-1. Пользователь вызывает `/portfolio` и присылает PDF-файл.
-2. Бот скачивает файл и кодирует его в base64.
-3. `POST /ai/parse-pdf` — rxresu.me распознаёт PDF в структуру резюме.
-4. `POST /resumes/import` — из этих данных создаётся резюме в аккаунте.
-5. Бот отвечает ссылкой на редактор резюме.
+1. Пользователь вызывает `/portfolio`.
+2. Присылает резюме:
+   - **ссылку из rxresu.me** (`https://rxresu.me/username/slug` или ссылку из
+     редактора) → бот читает данные через `GET /resumes/{username}/{slug}` или
+     `GET /resumes/{id}`;
+   - **или PDF-файл** → бот распознаёт его через `POST /ai/parse-pdf`.
+3. Присылает текст вакансии.
+4. LLM переписывает раздел «О себе», буллеты опыта и порядок навыков под
+   вакансию (без выдумывания фактов).
+5. `POST /resumes/import` — адаптированное резюме создаётся новым в аккаунте.
+6. Бот отвечает ссылкой на редактор резюме и списком изменений.
 
 Документация API: <https://docs.rxresu.me/api-reference/ai/parse-a-pdf-file-into-resume-data>
 
@@ -19,8 +26,8 @@
 | Команда | Описание |
 |---|---|
 | `/start`, `/help` | Приветствие и инструкция |
-| `/portfolio` | Начать: бот ждёт PDF-файл |
-| `/cancel` | Отменить ожидание файла |
+| `/portfolio` | Начать: бот ждёт ссылку на резюме или PDF, затем вакансию |
+| `/cancel` | Сбросить текущий диалог |
 
 ## Настройка
 
@@ -47,8 +54,11 @@ cp .env.example .env
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | Токен от @BotFather | — (обязательно) |
 | `RXRESUME_API_KEY` | Ключ API rxresu.me (`x-api-key`) | — (обязательно) |
+| `OPENAI_API_KEY` | Ключ OpenAI/OpenRouter для адаптации | — (обязательно) |
 | `RXRESUME_BASE_URL` | Базовый URL API | `https://rxresu.me/api/openapi` |
-| `RXRESUME_AI_PROVIDER_ID` | ID AI-провайдера для парсинга | пусто (по умолчанию) |
+| `RXRESUME_AI_PROVIDER_ID` | ID AI-провайдера для парсинга PDF | пусто (по умолчанию) |
+| `OPENAI_BASE_URL` | Базовый URL LLM (для OpenRouter) | авто для `sk-or-…` |
+| `LLM_MODEL` | Модель LLM | `gpt-4o-mini` |
 | `MAX_PDF_SIZE_MB` | Лимит размера PDF | `15` |
 
 > Для self-hosted инстанса укажите `RXRESUME_BASE_URL=https://<ваш-хост>/api/openapi`.
@@ -58,7 +68,7 @@ cp .env.example .env
 **Docker Compose (рекомендуется):**
 
 ```bash
-cp .env.example .env   # заполнить TELEGRAM_BOT_TOKEN и RXRESUME_API_KEY
+cp .env.example .env   # заполнить TELEGRAM_BOT_TOKEN, RXRESUME_API_KEY, OPENAI_API_KEY
 make up
 make logs
 ```
@@ -84,5 +94,8 @@ make run
 ## Ограничения
 
 - Telegram Bot API отдаёт файлы до ~20 МБ — крупнее PDF бот скачать не сможет.
-- Качество распознавания зависит от AI-провайдера, настроенного в rxresu.me.
-- Резюме создаётся в аккаунте, которому принадлежит `RXRESUME_API_KEY`.
+- Качество распознавания PDF зависит от AI-провайдера, настроенного в rxresu.me.
+- Ссылка на резюме должна быть публичной либо принадлежать аккаунту `RXRESUME_API_KEY`.
+- Адаптация переписывает только текст (о себе, буллеты опыта, порядок навыков) и
+  не выдумывает компании, даты и метрики. Новое резюме создаётся в аккаунте
+  `RXRESUME_API_KEY`.

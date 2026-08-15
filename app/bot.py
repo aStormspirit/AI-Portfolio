@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
@@ -14,7 +15,12 @@ from telegram.ext import (
 )
 
 from app.config import Settings, get_settings
-from app.services.rxresume import RxResumeClient, RxResumeError
+from app.services.adapt import AdaptationError, ResumeAdapter
+from app.services.rxresume import (
+    RxResumeClient,
+    RxResumeError,
+    looks_like_resume_reference,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,34 +28,47 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-AWAITING_KEY = "awaiting_portfolio"
+STATE_KEY = "state"
+RESUME_KEY = "resume_data"
+STATE_AWAIT_RESUME = "await_resume"
+STATE_AWAIT_VACANCY = "await_vacancy"
+MIN_VACANCY_LEN = 40
 
 START_TEXT = (
-    "👋 Привет! Я собираю резюме на Reactive Resume из вашего портфолио.\n\n"
-    "1. Отправьте команду /portfolio\n"
-    "2. Пришлите PDF-файл портфолио/резюме\n"
-    "3. Я распознаю его и создам резюме в rxresu.me\n\n"
+    "👋 Привет! Я адаптирую резюме под вакансию и загружаю результат в Reactive Resume.\n\n"
+    "1. Отправьте /portfolio\n"
+    "2. Пришлите резюме — ссылку на резюме из rxresu.me (лучше всего) или PDF-файл\n"
+    "3. Пришлите текст вакансии\n"
+    "4. Я адаптирую резюме и создам новое в rxresu.me\n\n"
     "Отменить — /cancel."
 )
 
-PORTFOLIO_PROMPT = (
-    "📄 Пришлите PDF-файл вашего портфолио одним сообщением.\n"
-    "Я отправлю его в rxresu.me, распознаю содержимое и создам резюме."
+RESUME_PROMPT = (
+    "📄 Пришлите резюме:\n"
+    "• ссылку из rxresu.me (например https://rxresu.me/username/slug или ссылку из редактора),\n"
+    "• либо PDF-файл резюме.\n\n"
+    "Отменить — /cancel."
+)
+
+VACANCY_PROMPT = (
+    "✅ Резюме принято.\n\n"
+    "Теперь пришлите текст вакансии целиком — под неё я адаптирую резюме."
 )
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    context.user_data.pop(AWAITING_KEY, None)
-    await update.message.reply_text(START_TEXT)
+    _reset(context)
+    await update.message.reply_text(START_TEXT, disable_web_page_preview=True)
 
 
 async def portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    context.user_data[AWAITING_KEY] = True
-    await update.message.reply_text(PORTFOLIO_PROMPT)
+    _reset(context)
+    context.user_data[STATE_KEY] = STATE_AWAIT_RESUME
+    await update.message.reply_text(RESUME_PROMPT, disable_web_page_preview=True)
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    context.user_data.pop(AWAITING_KEY, None)
+    _reset(context)
     await update.message.reply_text("Ок, отменил. Наберите /portfolio, когда будете готовы.")
 
 
@@ -57,29 +76,24 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     message = update.message
     document = message.document
 
-    if not context.user_data.get(AWAITING_KEY):
-        await message.reply_text(
-            "Сначала наберите /portfolio, затем пришлите PDF-файл."
-        )
+    if context.user_data.get(STATE_KEY) != STATE_AWAIT_RESUME:
+        await message.reply_text("Сначала наберите /portfolio.")
         return
 
     settings: Settings = context.bot_data["settings"]
-
-    filename = document.file_name or "portfolio.pdf"
+    filename = document.file_name or "resume.pdf"
     is_pdf = (document.mime_type == "application/pdf") or filename.lower().endswith(".pdf")
     if not is_pdf:
-        await message.reply_text("Нужен файл в формате PDF. Пришлите PDF ещё раз.")
+        await message.reply_text("Нужен PDF-файл или ссылка на резюме из rxresu.me.")
         return
-
     if document.file_size and document.file_size > settings.max_pdf_size_bytes:
         await message.reply_text(
             f"Файл больше {settings.max_pdf_size_mb} МБ. Уменьшите размер PDF."
         )
         return
 
+    status = await message.reply_text("⏳ Распознаю PDF через rxresu.me…")
     await context.bot.send_chat_action(message.chat_id, ChatAction.TYPING)
-    status = await message.reply_text("⏳ Загружаю и распознаю портфолио… это займёт до минуты.")
-
     try:
         tg_file = await context.bot.get_file(document.file_id)
         pdf_bytes = bytes(await tg_file.download_as_bytearray())
@@ -90,31 +104,131 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     client: RxResumeClient = context.bot_data["rxresume"]
     try:
-        resume = await client.create_from_pdf(filename, pdf_bytes)
+        resume_data = await client.parse_pdf(filename, pdf_bytes)
     except RxResumeError as exc:
         await status.edit_text(f"❌ {exc}")
         return
     except Exception as exc:  # noqa: BLE001
-        logger.exception("unexpected error while creating resume")
+        logger.exception("unexpected parse error")
         await status.edit_text(f"Непредвиденная ошибка: {exc}")
         return
 
-    context.user_data.pop(AWAITING_KEY, None)
+    _store_resume(context, resume_data)
+    await status.edit_text(VACANCY_PROMPT)
+
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    text = (message.text or "").strip()
+    state = context.user_data.get(STATE_KEY)
+
+    if state == STATE_AWAIT_RESUME:
+        await _handle_resume_link(update, context, text)
+        return
+
+    if state == STATE_AWAIT_VACANCY:
+        await _handle_vacancy(update, context, text)
+        return
+
+    await message.reply_text("Наберите /portfolio, чтобы начать.")
+
+
+async def _handle_resume_link(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, text: str
+) -> None:
+    message = update.message
+    if not looks_like_resume_reference(text):
+        await message.reply_text(
+            "Это не похоже на ссылку на резюме. Пришлите ссылку из rxresu.me или PDF-файл."
+        )
+        return
+
+    client: RxResumeClient = context.bot_data["rxresume"]
+    status = await message.reply_text("⏳ Загружаю резюме по ссылке…")
+    try:
+        resume_data = await client.fetch_resume_by_reference(text)
+    except RxResumeError as exc:
+        await status.edit_text(f"❌ {exc}")
+        return
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("unexpected fetch error")
+        await status.edit_text(f"Непредвиденная ошибка: {exc}")
+        return
+
+    _store_resume(context, resume_data)
+    await status.edit_text(VACANCY_PROMPT)
+
+
+async def _handle_vacancy(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, vacancy: str
+) -> None:
+    message = update.message
+    if len(vacancy) < MIN_VACANCY_LEN:
+        await message.reply_text(
+            "Текст вакансии слишком короткий. Вставьте полное описание вакансии."
+        )
+        return
+
+    resume_data = context.user_data.get(RESUME_KEY)
+    if not resume_data:
+        _reset(context)
+        await message.reply_text("Резюме потерялось. Начните заново: /portfolio.")
+        return
+
+    status = await message.reply_text("🛠 Адаптирую резюме под вакансию…")
+    await context.bot.send_chat_action(message.chat_id, ChatAction.TYPING)
+
+    adapter: ResumeAdapter = context.bot_data["adapter"]
+    client: RxResumeClient = context.bot_data["rxresume"]
+    try:
+        adapted, change_notes = await asyncio.to_thread(
+            adapter.adapt, resume_data, vacancy
+        )
+        await status.edit_text("📤 Загружаю новое резюме в rxresu.me…")
+        resume = await client.import_resume(adapted, title=_adapted_title(resume_data))
+    except AdaptationError as exc:
+        await status.edit_text(f"❌ {exc}")
+        return
+    except RxResumeError as exc:
+        await status.edit_text(f"❌ {exc}")
+        return
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("unexpected adaptation error")
+        await status.edit_text(f"Непредвиденная ошибка: {exc}")
+        return
+
+    _reset(context)
+    notes = ""
+    if change_notes:
+        bullets = "\n".join(f"• {note}" for note in change_notes[:8])
+        notes = f"\n\nЧто изменилось:\n{bullets}"
     await status.edit_text(
-        "✅ Готово! Резюме создано в rxresu.me.\n\n"
+        "✅ Готово! Адаптированное резюме создано в rxresu.me.\n\n"
         f"«{resume.title}»\n"
         f"🖊 Редактор: {resume.builder_url}\n"
-        f"📁 Все резюме: {resume.dashboard_url}\n\n"
-        "Отправьте /portfolio, чтобы обработать ещё одно.",
+        f"📁 Все резюме: {resume.dashboard_url}"
+        f"{notes}\n\n"
+        "Ещё одна вакансия? Отправьте /portfolio.",
         disable_web_page_preview=True,
     )
 
 
-async def handle_stray_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if context.user_data.get(AWAITING_KEY):
-        await update.message.reply_text("Жду PDF-файл. Пришлите документ (не текст).")
-    else:
-        await update.message.reply_text("Наберите /portfolio, чтобы начать.")
+def _reset(context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data.pop(STATE_KEY, None)
+    context.user_data.pop(RESUME_KEY, None)
+
+
+def _store_resume(context: ContextTypes.DEFAULT_TYPE, resume_data: dict) -> None:
+    context.user_data[RESUME_KEY] = resume_data
+    context.user_data[STATE_KEY] = STATE_AWAIT_VACANCY
+
+
+def _adapted_title(resume_data: dict) -> str:
+    basics = resume_data.get("basics") if isinstance(resume_data, dict) else None
+    name = ""
+    if isinstance(basics, dict):
+        name = str(basics.get("name") or "").strip()
+    return f"{name} — под вакансию".strip(" —") if name else "Резюме под вакансию"
 
 
 def build_application(settings: Settings) -> Application:
@@ -126,15 +240,14 @@ def build_application(settings: Settings) -> Application:
     application = ApplicationBuilder().token(settings.telegram_bot_token).build()
     application.bot_data["settings"] = settings
     application.bot_data["rxresume"] = RxResumeClient(settings)
+    application.bot_data["adapter"] = ResumeAdapter(settings)
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", start))
     application.add_handler(CommandHandler("portfolio", portfolio))
     application.add_handler(CommandHandler("cancel", cancel))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_stray_text)
-    )
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     return application
 
 

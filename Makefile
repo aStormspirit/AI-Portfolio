@@ -14,7 +14,7 @@ install: ## Create venv and install Python dependencies
 
 env: ## Copy .env.example to .env if missing
 	@test -f .env || cp .env.example .env
-	@echo ".env is ready — set TELEGRAM_BOT_TOKEN and RXRESUME_API_KEY"
+	@echo ".env is ready — set TELEGRAM_BOT_TOKEN, RXRESUME_API_KEY, OPENAI_API_KEY"
 
 up: env ## Build and start the bot with Docker Compose
 	$(COMPOSE) up --build -d

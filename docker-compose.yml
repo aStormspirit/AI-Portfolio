@@ -7,6 +7,8 @@ services:
     environment:
       RXRESUME_BASE_URL: ${RXRESUME_BASE_URL:-https://rxresu.me/api/openapi}
       RXRESUME_AI_PROVIDER_ID: ${RXRESUME_AI_PROVIDER_ID:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
       MAX_PDF_SIZE_MB: ${MAX_PDF_SIZE_MB:-15}
     volumes:
       - ./app:/app/app

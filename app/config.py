@@ -4,6 +4,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_RXRESUME_BASE_URL = "https://rxresu.me/api/openapi"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 class Settings(BaseSettings):
@@ -18,6 +19,17 @@ class Settings(BaseSettings):
         default="",
         description="Token from @BotFather",
     )
+
+    # LLM (adaptation to a job vacancy)
+    openai_api_key: str = Field(
+        default="",
+        description="OpenAI or OpenRouter API key",
+    )
+    openai_base_url: str | None = Field(
+        default=None,
+        description="Optional OpenAI-compatible base URL (e.g. OpenRouter)",
+    )
+    llm_model: str = "gpt-4o-mini"
 
     # Reactive Resume (rxresu.me) API
     rxresume_api_key: str = Field(
@@ -43,6 +55,15 @@ class Settings(BaseSettings):
     @property
     def rxresume_api_base(self) -> str:
         return self.rxresume_base_url.rstrip("/")
+
+    @property
+    def resolved_openai_base_url(self) -> str | None:
+        if self.openai_base_url:
+            return self.openai_base_url.rstrip("/")
+        # OpenRouter keys start with sk-or-
+        if self.openai_api_key.startswith("sk-or-"):
+            return OPENROUTER_BASE_URL
+        return None
 
     @property
     def rxresume_app_base(self) -> str:
