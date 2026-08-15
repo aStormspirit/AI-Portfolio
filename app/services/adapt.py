@@ -31,14 +31,14 @@ Hard constraints (never break):
 """
 
 
-COVER_LETTER_SYSTEM = """You are an expert career writer. Write a concise, compelling cover letter tailored to the given job vacancy.
+COVER_LETTER_SYSTEM = """You write a short, human cover message for a job application — the kind a candidate sends a recruiter in a chat or a quick email intro, not a formal letter.
 
 Rules:
-- Base the letter on the vacancy: address its key requirements, responsibilities, and the company/role if named.
-- Structure: greeting, a strong opening hook, one or two short paragraphs matching a candidate to the role, and a closing with a call to action and sign-off.
-- Keep it ~200-280 words. Professional but warm. Plain text only (no markdown), suitable as a message/email body.
+- Keep it to 2-3 sentences. No greeting line, no signature, no bullet points, no markdown.
+- Sound like a real person: warm, natural, confident, first person. Avoid clichés and corporate boilerplate like "I am writing to express my interest".
+- Say plainly why the candidate fits THIS vacancy — pick 1-2 concrete points from the vacancy text.
 - Write in the SAME language as the vacancy text.
-- Where personal specifics are unknown, use clear placeholders in square brackets like [Ваше имя] / [Your Name], [компания], [достижение]. Never invent concrete facts, employers, or metrics.
+- Where a personal specific is unknown, use a short placeholder in square brackets like [Ваше имя] / [ключевой навык]. Never invent concrete facts, employers, or metrics.
 """
 
 
@@ -200,7 +200,7 @@ class ResumeAdapter:
         prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", COVER_LETTER_SYSTEM),
-                ("human", "VACANCY:\n{vacancy}\n\nWrite the cover letter now."),
+                ("human", "VACANCY:\n{vacancy}\n\nWrite the short 2-3 sentence message now."),
             ]
         )
         chain = prompt | self._llm
