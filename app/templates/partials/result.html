@@ -1,0 +1,50 @@
+{% if error %}
+<div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">
+  <p class="font-medium">Ошибка</p>
+  <p class="mt-1 leading-relaxed">{{ error }}</p>
+</div>
+{% else %}
+<div class="space-y-6">
+  <div class="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-5 py-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p class="text-sm font-medium text-emerald-900">Готово</p>
+        <p class="mt-1 text-sm text-emerald-800">Резюме адаптировано. Скачивание начнётся автоматически.</p>
+      </div>
+      <a
+        id="download-link"
+        href="/download/{{ job_id }}"
+        class="inline-flex items-center rounded-lg bg-emerald-800 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+      >
+        Скачать PDF
+      </a>
+    </div>
+  </div>
+
+  {% if change_notes %}
+  <section class="rounded-2xl border border-slate-200 bg-white/90 p-5 sm:p-6">
+    <h2 class="text-lg font-semibold text-slate-900" style="font-family: Georgia, 'Times New Roman', serif;">Что изменилось</h2>
+    <ul class="mt-3 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-slate-700">
+      {% for note in change_notes %}
+      <li>{{ note }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="rounded-2xl border border-slate-200 bg-white/90 p-5 sm:p-6">
+    <h2 class="text-lg font-semibold text-slate-900" style="font-family: Georgia, 'Times New Roman', serif;">Превью</h2>
+    <pre class="preview mt-3 rounded-lg bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 border border-slate-100">{{ preview_markdown }}</pre>
+  </section>
+</div>
+{% if auto_download %}
+<script>
+  (function () {
+    var link = document.getElementById("download-link");
+    if (link) {
+      link.click();
+    }
+  })();
+</script>
+{% endif %}
+{% endif %}
