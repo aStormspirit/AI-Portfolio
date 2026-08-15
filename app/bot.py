@@ -32,14 +32,20 @@ STATE_KEY = "state"
 RESUME_KEY = "resume_data"
 STATE_AWAIT_RESUME = "await_resume"
 STATE_AWAIT_VACANCY = "await_vacancy"
+STATE_AWAIT_COVER = "await_cover"
 MIN_VACANCY_LEN = 40
 
 START_TEXT = (
-    "👋 Привет! Я адаптирую резюме под вакансию и загружаю результат в Reactive Resume.\n\n"
-    "1. Отправьте /portfolio\n"
-    "2. Пришлите резюме — ссылку на резюме из rxresu.me (лучше всего) или PDF-файл\n"
-    "3. Пришлите текст вакансии\n"
-    "4. Я адаптирую резюме и создам новое в rxresu.me\n\n"
+    "👋 Привет! Я помогаю с трудоустройством:\n\n"
+    "📄 /portfolio — адаптировать резюме под вакансию и загрузить в Reactive Resume\n"
+    "   1) ссылка на резюме из rxresu.me (лучше всего) или PDF-файл\n"
+    "   2) текст вакансии → новое резюме в rxresu.me\n\n"
+    "✉️ /message — сгенерировать сопроводительное письмо по тексту вакансии\n\n"
+    "Отменить текущий шаг — /cancel."
+)
+
+COVER_PROMPT = (
+    "✉️ Пришлите текст вакансии — сгенерирую сопроводительное письмо под неё.\n\n"
     "Отменить — /cancel."
 )
 
@@ -67,9 +73,15 @@ async def portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(RESUME_PROMPT, disable_web_page_preview=True)
 
 
+async def message_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    _reset(context)
+    context.user_data[STATE_KEY] = STATE_AWAIT_COVER
+    await update.message.reply_text(COVER_PROMPT)
+
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     _reset(context)
-    await update.message.reply_text("Ок, отменил. Наберите /portfolio, когда будете готовы.")
+    await update.message.reply_text("Ок, отменил. Наберите /portfolio или /message, когда будете готовы.")
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -130,7 +142,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _handle_vacancy(update, context, text)
         return
 
-    await message.reply_text("Наберите /portfolio, чтобы начать.")
+    if state == STATE_AWAIT_COVER:
+        await _handle_cover(update, context, text)
+        return
+
+    await message.reply_text("Наберите /portfolio или /message, чтобы начать.")
 
 
 async def _handle_resume_link(
@@ -213,6 +229,42 @@ async def _handle_vacancy(
     )
 
 
+async def _handle_cover(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, vacancy: str
+) -> None:
+    message = update.message
+    if len(vacancy) < MIN_VACANCY_LEN:
+        await message.reply_text(
+            "Текст вакансии слишком короткий. Вставьте полное описание вакансии."
+        )
+        return
+
+    status = await message.reply_text("✍️ Пишу сопроводительное письмо…")
+    await context.bot.send_chat_action(message.chat_id, ChatAction.TYPING)
+
+    adapter: ResumeAdapter = context.bot_data["adapter"]
+    try:
+        letter = await asyncio.to_thread(adapter.generate_cover_letter, vacancy)
+    except AdaptationError as exc:
+        await status.edit_text(f"❌ {exc}")
+        return
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("unexpected cover letter error")
+        await status.edit_text(f"Непредвиденная ошибка: {exc}")
+        return
+
+    _reset(context)
+    await status.delete()
+    # Long letters can exceed one Telegram message; send in ~4000-char chunks.
+    for chunk in _split_message(letter, 4000):
+        await message.reply_text(chunk)
+    await message.reply_text("Готово. Ещё одно письмо? — /message. Резюме под вакансию — /portfolio.")
+
+
+def _split_message(text: str, size: int) -> list[str]:
+    return [text[i : i + size] for i in range(0, len(text), size)] or [text]
+
+
 def _reset(context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.pop(STATE_KEY, None)
     context.user_data.pop(RESUME_KEY, None)
@@ -245,6 +297,7 @@ def build_application(settings: Settings) -> Application:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", start))
     application.add_handler(CommandHandler("portfolio", portfolio))
+    application.add_handler(CommandHandler("message", message_cmd))
     application.add_handler(CommandHandler("cancel", cancel))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

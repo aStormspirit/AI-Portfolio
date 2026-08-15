@@ -31,6 +31,17 @@ Hard constraints (never break):
 """
 
 
+COVER_LETTER_SYSTEM = """You are an expert career writer. Write a concise, compelling cover letter tailored to the given job vacancy.
+
+Rules:
+- Base the letter on the vacancy: address its key requirements, responsibilities, and the company/role if named.
+- Structure: greeting, a strong opening hook, one or two short paragraphs matching a candidate to the role, and a closing with a call to action and sign-off.
+- Keep it ~200-280 words. Professional but warm. Plain text only (no markdown), suitable as a message/email body.
+- Write in the SAME language as the vacancy text.
+- Where personal specifics are unknown, use clear placeholders in square brackets like [Ваше имя] / [Your Name], [компания], [достижение]. Never invent concrete facts, employers, or metrics.
+"""
+
+
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -184,6 +195,26 @@ class ResumeAdapter:
 
         merged = merge_adaptation(resume_data, result)
         return merged, result.change_notes
+
+    def generate_cover_letter(self, vacancy_text: str) -> str:
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", COVER_LETTER_SYSTEM),
+                ("human", "VACANCY:\n{vacancy}\n\nWrite the cover letter now."),
+            ]
+        )
+        chain = prompt | self._llm
+        try:
+            result = chain.invoke({"vacancy": vacancy_text})
+        except Exception as exc:  # noqa: BLE001
+            raise AdaptationError(
+                f"Не удалось сгенерировать сопроводительное письмо: {exc}"
+            ) from exc
+        text = getattr(result, "content", None) or str(result)
+        text = text.strip()
+        if not text:
+            raise AdaptationError("Модель вернула пустое письмо. Попробуйте ещё раз.")
+        return text
 
 
 def _as_json(value: Any) -> str:
