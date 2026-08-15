@@ -4,13 +4,8 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-uploads/*
-!uploads/.gitkeep
-outputs/*
-!outputs/.gitkeep
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 *.pdf
-!app/static/
 .DS_Store

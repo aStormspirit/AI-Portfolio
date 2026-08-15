@@ -1,6 +1,5 @@
 .PHONY: help install env up down build rebuild logs restart ps shell run stop clean
 
-PORT ?= 8000
 COMPOSE ?= docker compose
 export DOCKER_BUILDKIT ?= 1
 export COMPOSE_DOCKER_CLI_BUILD ?= 1
@@ -15,11 +14,11 @@ install: ## Create venv and install Python dependencies
 
 env: ## Copy .env.example to .env if missing
 	@test -f .env || cp .env.example .env
-	@echo ".env is ready — set OPENAI_API_KEY"
+	@echo ".env is ready — set TELEGRAM_BOT_TOKEN and RXRESUME_API_KEY"
 
-up: env ## Build and start with Docker Compose
+up: env ## Build and start the bot with Docker Compose
 	$(COMPOSE) up --build -d
-	@echo "Open http://127.0.0.1:$(PORT)"
+	@echo "Bot is running. Follow logs with: make logs"
 
 down: ## Stop and remove containers
 	$(COMPOSE) down
@@ -32,22 +31,21 @@ rebuild: ## Rebuild image without cache and restart
 	$(COMPOSE) up -d
 
 logs: ## Follow container logs
-	$(COMPOSE) logs -f app
+	$(COMPOSE) logs -f bot
 
-restart: ## Restart the app container
-	$(COMPOSE) restart app
+restart: ## Restart the bot container
+	$(COMPOSE) restart bot
 
 ps: ## Show compose status
 	$(COMPOSE) ps
 
 shell: ## Open a shell in the running container
-	$(COMPOSE) exec app bash
+	$(COMPOSE) exec bot bash
 
-run: env ## Run locally with uvicorn (no Docker)
-	.venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port $(PORT)
+run: env ## Run the bot locally (no Docker)
+	.venv/bin/python -m app.bot
 
 stop: down ## Alias for down
 
-clean: down ## Stop containers and remove local generated files
-	rm -rf uploads/* outputs/*
-	@touch uploads/.gitkeep outputs/.gitkeep
+clean: down ## Stop containers
+	@echo "Cleaned up containers."
