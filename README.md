@@ -1,71 +1,78 @@
-# AI Resume Editor
+# Resume → Vacancy → Reactive Resume Telegram Bot
 
-MVP-сервис: загружаете PDF-резюме и текст вакансии — LangChain адаптирует содержание под вакансию и отдаёт новый PDF.
+Телеграм-бот: отправляете `/portfolio`, присылаете резюме (ссылку из
+[Reactive Resume](https://rxresu.me) или PDF), затем текст вакансии — бот
+адаптирует резюме под вакансию через LLM и загружает **новое** резюме в ваш
+аккаунт rxresu.me.
 
-## Стек
+## Как это работает
 
-- FastAPI + Jinja2 + HTMX
-- LangChain + OpenAI (structured output)
-- PyMuPDF (извлечение текста)
-- WeasyPrint (HTML → PDF)
+1. Пользователь вызывает `/portfolio`.
+2. Присылает резюме:
+   - **ссылку из rxresu.me** (`https://rxresu.me/username/slug` или ссылку из
+     редактора) → бот читает данные через `GET /resumes/{username}/{slug}` или
+     `GET /resumes/{id}`;
+   - **или PDF-файл** → бот распознаёт его через `POST /ai/parse-pdf`.
+3. Присылает текст вакансии.
+4. LLM переписывает раздел «О себе», буллеты опыта и порядок навыков под
+   вакансию (без выдумывания фактов).
+5. `POST /resumes/import` — адаптированное резюме создаётся новым в аккаунте.
+6. Бот отвечает ссылкой на редактор резюме и списком изменений.
 
-## Быстрый старт
+Документация API: <https://docs.rxresu.me/api-reference/ai/parse-a-pdf-file-into-resume-data>
 
-### 1. Системные зависимости (WeasyPrint)
+## Команды бота
 
-**Ubuntu / Debian:**
+| Команда | Описание |
+|---|---|
+| `/start`, `/help` | Приветствие и инструкция |
+| `/portfolio` | Адаптация резюме: бот ждёт ссылку на резюме или PDF, затем вакансию |
+| `/message` | Сгенерировать сопроводительное письмо по тексту вакансии |
+| `/cancel` | Сбросить текущий диалог |
 
-```bash
-sudo apt-get update
-sudo apt-get install -y \
-  libpango-1.0-0 \
-  libpangocairo-1.0-0 \
-  libgdk-pixbuf-2.0-0 \
-  libffi-dev \
-  shared-mime-info \
-  fonts-dejavu-core
-```
+## Настройка
 
-**Fedora:**
+### 1. Токен бота
 
-```bash
-sudo dnf install pango gdk-pixbuf2 libffi-devel
-```
+Создайте бота у [@BotFather](https://t.me/BotFather) и скопируйте токен.
 
-### 2. Python-окружение
+### 2. API-ключ Reactive Resume
 
-```bash
-cd AI-Portfolio
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+1. Войдите на <https://rxresu.me>.
+2. Settings → **API Keys** → *Create a new API key*.
+3. Скопируйте ключ сразу — он показывается один раз.
+4. (Опционально) Settings → **AI** — подключите AI-провайдера, если хотите
+   указать конкретный `RXRESUME_AI_PROVIDER_ID`. Без него используется провайдер
+   по умолчанию.
 
-### 3. Конфигурация
+### 3. Переменные окружения
 
 ```bash
 cp .env.example .env
 ```
 
-Заполните `.env`:
-
 | Переменная | Описание | По умолчанию |
 |---|---|---|
-| `OPENAI_API_KEY` | API-ключ OpenAI или OpenRouter | — (обязательно) |
-| `OPENAI_BASE_URL` | Базовый URL API (для OpenRouter: `https://openrouter.ai/api/v1`) | авто для `sk-or-…` |
-| `LLM_MODEL` | Модель | `gpt-4o-mini` (для OpenRouter: `openai/gpt-4o-mini`) |
-| `MAX_PDF_SIZE_MB` | Лимит размера PDF | `5` |
+| `TELEGRAM_BOT_TOKEN` | Токен от @BotFather | — (обязательно) |
+| `RXRESUME_API_KEY` | Ключ API rxresu.me (`x-api-key`) | — (обязательно) |
+| `OPENAI_API_KEY` | Ключ OpenAI/OpenRouter для адаптации | — (обязательно) |
+| `RXRESUME_BASE_URL` | Базовый URL API | `https://rxresu.me/api/openapi` |
+| `RXRESUME_AI_PROVIDER_ID` | ID AI-провайдера для парсинга PDF | пусто (по умолчанию) |
+| `OPENAI_BASE_URL` | Базовый URL LLM (для OpenRouter) | авто для `sk-or-…` |
+| `LLM_MODEL` | Модель LLM | `gpt-4o-mini` |
+| `MAX_PDF_SIZE_MB` | Лимит размера PDF | `15` |
 
-### 4. Запуск
+> Для self-hosted инстанса укажите `RXRESUME_BASE_URL=https://<ваш-хост>/api/openapi`.
+
+## Запуск
 
 **Docker Compose (рекомендуется):**
 
 ```bash
-cp .env.example .env   # указать OPENAI_API_KEY
+cp .env.example .env   # заполнить TELEGRAM_BOT_TOKEN, RXRESUME_API_KEY, OPENAI_API_KEY
 make up
+make logs
 ```
-
-Откройте http://127.0.0.1:8000
 
 **Локально без Docker:**
 
@@ -78,42 +85,18 @@ make run
 
 | Команда | Описание |
 |---|---|
-| `make up` | Собрать и запустить через Docker Compose |
+| `make up` | Собрать и запустить бота через Docker Compose |
 | `make down` | Остановить контейнеры |
-| `make logs` | Логи приложения |
+| `make logs` | Логи бота |
 | `make rebuild` | Пересобрать образ без кэша |
+| `make run` | Запустить локально в venv |
 | `make shell` | Shell внутри контейнера |
-| `make install` | Локальный venv + зависимости |
-| `make run` | Локальный uvicorn |
-| `make clean` | Остановить и очистить `uploads/` / `outputs/` |
 
-## Docker
+## Ограничения
 
-```bash
-docker compose up --build -d
-# или
-make up
-```
-
-Остановка: `make down` / `docker compose down`
-
-## Как это работает
-
-1. Из PDF извлекается текст (PyMuPDF).
-2. LLM приводит резюме к структурированной схеме.
-3. LLM анализирует вакансию (навыки, ключевые слова, приоритеты).
-4. LLM переписывает резюме под вакансию **без выдумывания фактов**.
-5. HTML-шаблон рендерится в PDF (WeasyPrint).
-
-Исходная вёрстка PDF не клонируется — на выходе единый профессиональный шаблон.
-
-## API
-
-| Метод | Путь | Описание |
-|---|---|---|
-| `GET` | `/` | Форма загрузки |
-| `POST` | `/adapt` | Адаптация (HTMX multipart) |
-| `GET` | `/download/{job_id}` | Скачать сгенерированный PDF |
-| `GET` | `/health` | Healthcheck |
-
-Сгенерированные файлы хранятся локально в `outputs/` около 1 часа.
+- Telegram Bot API отдаёт файлы до ~20 МБ — крупнее PDF бот скачать не сможет.
+- Качество распознавания PDF зависит от AI-провайдера, настроенного в rxresu.me.
+- Ссылка на резюме должна быть публичной либо принадлежать аккаунту `RXRESUME_API_KEY`.
+- Адаптация переписывает только текст (о себе, буллеты опыта, порядок навыков) и
+  не выдумывает компании, даты и метрики. Новое резюме создаётся в аккаунте
+  `RXRESUME_API_KEY`.

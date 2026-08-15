@@ -1,24 +1,16 @@
 services:
-  app:
+  bot:
     build: .
-    container_name: ai-resume-editor
-    ports:
-      - "${PORT:-8000}:8000"
+    container_name: portfolio-rxresume-bot
     env_file:
       - .env
     environment:
-      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      RXRESUME_BASE_URL: ${RXRESUME_BASE_URL:-https://rxresu.me/api/openapi}
+      RXRESUME_AI_PROVIDER_ID: ${RXRESUME_AI_PROVIDER_ID:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
-      MAX_PDF_SIZE_MB: ${MAX_PDF_SIZE_MB:-5}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      MAX_PDF_SIZE_MB: ${MAX_PDF_SIZE_MB:-15}
     volumes:
       - ./app:/app/app
-      - ./uploads:/app/uploads
-      - ./outputs:/app/outputs
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["python", "-m", "app.bot"]
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
