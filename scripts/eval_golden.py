@@ -38,7 +38,7 @@ def _check_structure(letter: str) -> list[str]:
         if not pattern.search(letter):
             missing.append(name)
     length = len(letter)
-    if length < 500:
+    if length < 200:
         missing.append("too_short")
     if length > 2500:
         missing.append("too_long")

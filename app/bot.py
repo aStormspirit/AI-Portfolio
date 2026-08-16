@@ -33,19 +33,28 @@ RESUME_KEY = "resume_data"
 STATE_AWAIT_RESUME = "await_resume"
 STATE_AWAIT_VACANCY = "await_vacancy"
 STATE_AWAIT_COVER = "await_cover"
+STATE_AWAIT_CLIENT_TASK = "await_client_task"
 MIN_VACANCY_LEN = 40
+MIN_TASK_LEN = 40
 
 START_TEXT = (
-    "👋 Привет! Я помогаю с трудоустройством:\n\n"
+    "👋 Привет! Я помогаю с трудоустройством и поиском заказов:\n\n"
     "📄 /portfolio — адаптировать резюме под вакансию и загрузить в Reactive Resume\n"
     "   1) ссылка на резюме из rxresu.me (лучше всего) или PDF-файл\n"
     "   2) текст вакансии → новое резюме в rxresu.me\n\n"
-    "✉️ /vacancy — сгенерировать сопроводительное письмо по тексту вакансии\n\n"
+    "✉️ /vacancy — сопроводительное письмо по тексту вакансии\n"
+    "💬 /message — сообщение потенциальному заказчику по описанию задачи\n\n"
     "Отменить текущий шаг — /cancel."
 )
 
 COVER_PROMPT = (
     "✉️ Пришлите текст вакансии — сгенерирую сопроводительное письмо под неё.\n\n"
+    "Отменить — /cancel."
+)
+
+CLIENT_TASK_PROMPT = (
+    "💬 Пришлите описание задачи / боли / брифа потенциального заказчика — "
+    "сгенерирую короткое сообщение с предложением услуг.\n\n"
     "Отменить — /cancel."
 )
 
@@ -79,9 +88,17 @@ async def vacancy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.message.reply_text(COVER_PROMPT)
 
 
+async def message_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    _reset(context)
+    context.user_data[STATE_KEY] = STATE_AWAIT_CLIENT_TASK
+    await update.message.reply_text(CLIENT_TASK_PROMPT)
+
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     _reset(context)
-    await update.message.reply_text("Ок, отменил. Наберите /portfolio или /vacancy, когда будете готовы.")
+    await update.message.reply_text(
+        "Ок, отменил. Наберите /portfolio, /vacancy или /message, когда будете готовы."
+    )
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -146,7 +163,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _handle_cover(update, context, text)
         return
 
-    await message.reply_text("Наберите /portfolio или /vacancy, чтобы начать.")
+    if state == STATE_AWAIT_CLIENT_TASK:
+        await _handle_client_task(update, context, text)
+        return
+
+    await message.reply_text(
+        "Наберите /portfolio, /vacancy или /message, чтобы начать."
+    )
 
 
 async def _handle_resume_link(
@@ -258,7 +281,44 @@ async def _handle_cover(
     # Long letters can exceed one Telegram message; send in ~4000-char chunks.
     for chunk in _split_message(letter, 4000):
         await message.reply_text(chunk)
-    await message.reply_text("Готово. Ещё одно письмо? — /vacancy. Резюме под вакансию — /portfolio.")
+    await message.reply_text(
+        "Готово. Ещё одно письмо? — /vacancy. "
+        "Сообщение заказчику — /message. Резюме — /portfolio."
+    )
+
+
+async def _handle_client_task(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, task: str
+) -> None:
+    message = update.message
+    if len(task) < MIN_TASK_LEN:
+        await message.reply_text(
+            "Описание задачи слишком короткое. Добавьте больше деталей: цель, контекст, ограничения."
+        )
+        return
+
+    status = await message.reply_text("💬 Пишу сообщение для заказчика…")
+    await context.bot.send_chat_action(message.chat_id, ChatAction.TYPING)
+
+    adapter: ResumeAdapter = context.bot_data["adapter"]
+    try:
+        outreach = await asyncio.to_thread(adapter.generate_client_message, task)
+    except AdaptationError as exc:
+        await status.edit_text(f"❌ {exc}")
+        return
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("unexpected client outreach error")
+        await status.edit_text(f"Непредвиденная ошибка: {exc}")
+        return
+
+    _reset(context)
+    await status.delete()
+    for chunk in _split_message(outreach, 4000):
+        await message.reply_text(chunk)
+    await message.reply_text(
+        "Готово. Ещё одно сообщение заказчику? — /message. "
+        "Сопроводительное — /vacancy. Резюме — /portfolio."
+    )
 
 
 def _split_message(text: str, size: int) -> list[str]:
@@ -298,6 +358,7 @@ def build_application(settings: Settings) -> Application:
     application.add_handler(CommandHandler("help", start))
     application.add_handler(CommandHandler("portfolio", portfolio))
     application.add_handler(CommandHandler("vacancy", vacancy_cmd))
+    application.add_handler(CommandHandler("message", message_cmd))
     application.add_handler(CommandHandler("cancel", cancel))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

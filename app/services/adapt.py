@@ -102,6 +102,44 @@ still be only 2–4 sentences — do not copy the examples verbatim or match the
 """
 
 
+CLIENT_OUTREACH_SYSTEM = """You write short outreach messages to potential clients (заказчикам)
+who may need the sender's professional services (freelance / consulting / contract work).
+
+Input is a TASK DESCRIPTION (problem, product idea, brief, or pain point) — not a job vacancy.
+
+Write in the SAME language as the task description. Plain text only: no markdown, no HTML,
+no bullet lists, no subject line.
+
+Required length: exactly 2–4 sentences total.
+
+What to cover:
+- Short greeting (use a name if present, else «Здравствуйте!» / equivalent — not a long preamble).
+- Jump into value: offer a concrete way to solve THEIR task (approach / stack / outcome).
+  Show you read the brief by naming 1–2 specifics from it — without «Я понимаю, что вам нужно…».
+- Soft CTA: short call / next step + contacts [телефон]/[email]/[Telegram].
+
+Style:
+- Sound like a real person writing in Telegram/email — direct, calm, confident.
+- Laconic: 2–4 sentences, roughly 250–700 characters.
+- Lead with help/offer, not with paraphrasing their request back to them.
+- Unknown personal facts → [placeholders] like [Ваше имя], [релевантный кейс], [срок оценки].
+
+Hard bans (never write):
+- «Я понимаю, что вам нужен/нужна/нужно…», «Как я понял…», «Судя по описанию, вам требуется…»
+- Empty flattery («впечатлён», «уникальный продукт», «лучшие на рынке»)
+- Resume dump, biography, or pushy sales pitch
+- Questions about budget in the first message (a soft «оценю объём после созвона» is OK)
+- Invented case studies, metrics, companies, or tools not implied by the task
+
+Bad (do not imitate):
+«Здравствуйте! Я понимаю, что вам нужен backend для автоматизации… Я могу помочь вам
+разработать эффективное решение… Давайте обсудим детали…»
+
+Good direction (shape only, invent nothing):
+«Здравствуйте! Могу взять backend для записи клиентов на FastAPI + админку и Telegram-уведомления
+вместо Excel — [релевантный кейс]. Готов за 20–30 минут уточнить объём и сроки: [Telegram].»
+"""
+
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -294,16 +332,45 @@ class ResumeAdapter:
             raise AdaptationError(
                 f"Не удалось сгенерировать сопроводительное письмо: {exc}"
             ) from exc
-        text = getattr(result, "content", None) or str(result)
-        if isinstance(text, list):
-            text = "".join(
-                part.get("text", "") if isinstance(part, dict) else str(part)
-                for part in text
-            )
-        text = str(text).strip()
-        if not text:
-            raise AdaptationError("Модель вернула пустое письмо. Попробуйте ещё раз.")
-        return text
+        return _response_text(result, empty_error="Модель вернула пустое письмо. Попробуйте ещё раз.")
+
+    def generate_client_message(self, task_description: str) -> str:
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", CLIENT_OUTREACH_SYSTEM),
+                (
+                    "human",
+                    "Write a short outreach message to a potential client based on "
+                    "this task description.\n\n"
+                    "TASK DESCRIPTION:\n{task}\n\n"
+                    "Write the message now.",
+                ),
+            ]
+        )
+        chain = prompt | self._cover_llm
+        try:
+            result = chain.invoke({"task": task_description})
+        except Exception as exc:  # noqa: BLE001
+            raise AdaptationError(
+                f"Не удалось сгенерировать сообщение для заказчика: {exc}"
+            ) from exc
+        return _response_text(
+            result,
+            empty_error="Модель вернула пустое сообщение. Попробуйте ещё раз.",
+        )
+
+
+def _response_text(result: Any, *, empty_error: str) -> str:
+    text = getattr(result, "content", None) or str(result)
+    if isinstance(text, list):
+        text = "".join(
+            part.get("text", "") if isinstance(part, dict) else str(part)
+            for part in text
+        )
+    text = str(text).strip()
+    if not text:
+        raise AdaptationError(empty_error)
+    return text
 
 
 def _as_json(value: Any) -> str:

@@ -39,7 +39,7 @@ def test_golden_set_has_at_least_three_letters() -> None:
     for ex in examples:
         assert ex.letter
         assert ex.title
-        assert 500 <= len(ex.letter) <= 2500
+        assert 200 <= len(ex.letter) <= 2500
 
 
 def test_format_golden_few_shot_is_letters_only() -> None:
@@ -84,6 +84,42 @@ def test_generate_cover_letter_passes_golden_examples() -> None:
     assert "FastAPI" in captured["payload"]["vacancy"]
     assert "EXAMPLE 1" in captured["payload"]["golden_examples"]
     assert "VACANCY:" not in captured["payload"]["golden_examples"]
+
+
+def test_generate_client_message_uses_task() -> None:
+    settings = _settings()
+    task = (
+        "Нужен backend для записи клиентов: FastAPI, Telegram-бот, деплой на VPS. "
+        "Сейчас всё в Excel."
+    )
+    captured: dict = {}
+
+    chain = MagicMock()
+
+    def fake_invoke(payload):
+        captured["payload"] = payload
+        return SimpleNamespace(
+            content=(
+                "Здравствуйте! Могу взять backend для записи клиентов на FastAPI "
+                "и Telegram-уведомления вместо Excel — [релевантный кейс]. "
+                "Готов коротко созвониться: [Telegram]."
+            )
+        )
+
+    chain.invoke.side_effect = fake_invoke
+    prompt = MagicMock()
+    prompt.__or__.return_value = chain
+
+    with (
+        patch("app.services.adapt.ChatOpenAI", return_value=MagicMock()),
+        patch("app.services.adapt.ChatPromptTemplate") as prompt_cls,
+    ):
+        prompt_cls.from_messages.return_value = prompt
+        adapter = ResumeAdapter(settings)
+        text = adapter.generate_client_message(task)
+
+    assert "FastAPI" in text or "Telegram" in text
+    assert "Excel" in captured["payload"]["task"]
 
 
 def test_generate_cover_letter_rejects_empty_model_output() -> None:

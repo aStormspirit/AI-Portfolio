@@ -28,6 +28,7 @@
 | `/start`, `/help` | Приветствие и инструкция |
 | `/portfolio` | Адаптация резюме: бот ждёт ссылку на резюме или PDF, затем вакансию |
 | `/vacancy` | Сгенерировать сопроводительное письмо по тексту вакансии |
+| `/message` | Сообщение потенциальному заказчику по описанию задачи |
 | `/cancel` | Сбросить текущий диалог |
 
 ## Настройка
@@ -92,8 +93,9 @@ make run
 ```bash
 make install
 make test            # юнит-тесты без LLM
-make test-message    # живой вызов LLM на tests/fixtures/sample_vacancy.txt
-make test-golden     # проверка golden-писем (стиль), опционально --generate
+make test-message          # живой вызов LLM на tests/fixtures/sample_vacancy.txt
+make test-client-message   # /message — питч заказчику на sample_client_task.txt
+make test-golden           # проверка golden-писем (стиль), опционально --generate
 ```
 
 ### Golden set
