@@ -27,7 +27,7 @@
 |---|---|
 | `/start`, `/help` | Приветствие и инструкция |
 | `/portfolio` | Адаптация резюме: бот ждёт ссылку на резюме или PDF, затем вакансию |
-| `/message` | Сгенерировать сопроводительное письмо по тексту вакансии |
+| `/vacancy` | Сгенерировать сопроводительное письмо по тексту вакансии |
 | `/cancel` | Сбросить текущий диалог |
 
 ## Настройка
@@ -60,8 +60,8 @@ cp .env.example .env
 | `RXRESUME_AI_PROVIDER_ID` | ID AI-провайдера для парсинга PDF | пусто (по умолчанию) |
 | `OPENAI_BASE_URL` | Базовый URL LLM (для OpenRouter) | авто для `sk-or-…` |
 | `LLM_MODEL` | Модель LLM | `gpt-4o-mini` |
-| `COVER_LETTER_TEMPERATURE` | Temperature для `/message` | `0.55` |
-| `COVER_LETTER_MAX_TOKENS` | Max tokens для `/message` | `900` |
+| `COVER_LETTER_TEMPERATURE` | Temperature для `/vacancy` | `0.55` |
+| `COVER_LETTER_MAX_TOKENS` | Max tokens для `/vacancy` | `900` |
 | `COVER_LETTER_GOLDEN_LIMIT` | Сколько golden-примеров в few-shot | `3` |
 | `MAX_PDF_SIZE_MB` | Лимит размера PDF | `15` |
 
@@ -84,7 +84,7 @@ make install
 make run
 ```
 
-## Локальный тест `/message`
+## Локальный тест `/vacancy`
 
 Письмо строится только по тексту вакансии (личные факты — через плейсхолдеры
 в квадратных скобках).
@@ -101,7 +101,7 @@ make test-golden     # проверка golden-писем (стиль), опци
 Эталонные **письма** (без вакансий) лежат в [`tests/fixtures/golden/`](tests/fixtures/golden/)
 как `*.txt`. Первая строка может быть заголовком: `# Название примера`.
 
-Они подмешиваются в промпт `/message` как few-shot (только текст писем).
+Они подмешиваются в промпт `/vacancy` как few-shot (только текст писем).
 
 Добавить пример:
 

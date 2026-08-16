@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate golden cover-letter examples and optionally smoke-test /message with them.
+"""Validate golden cover-letter examples and optionally smoke-test /vacancy with them.
 
 Examples:
   make test-golden

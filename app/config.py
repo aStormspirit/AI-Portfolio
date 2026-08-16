@@ -31,10 +31,10 @@ class Settings(BaseSettings):
     )
     llm_model: str = "gpt-4o-mini"
 
-    # Cover letter (/message)
+    # Cover letter (/vacancy)
     cover_letter_temperature: float = Field(
         default=0.55,
-        description="Sampling temperature for /message cover letters",
+        description="Sampling temperature for /vacancy cover letters",
     )
     cover_letter_max_tokens: int = Field(
         default=900,
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     )
     cover_letter_golden_limit: int = Field(
         default=3,
-        description="How many golden examples to include as few-shot for /message",
+        description="How many golden examples to include as few-shot for /vacancy",
     )
 
     # Reactive Resume (rxresu.me) API

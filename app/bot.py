@@ -40,7 +40,7 @@ START_TEXT = (
     "📄 /portfolio — адаптировать резюме под вакансию и загрузить в Reactive Resume\n"
     "   1) ссылка на резюме из rxresu.me (лучше всего) или PDF-файл\n"
     "   2) текст вакансии → новое резюме в rxresu.me\n\n"
-    "✉️ /message — сгенерировать сопроводительное письмо по тексту вакансии\n\n"
+    "✉️ /vacancy — сгенерировать сопроводительное письмо по тексту вакансии\n\n"
     "Отменить текущий шаг — /cancel."
 )
 
@@ -73,7 +73,7 @@ async def portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(RESUME_PROMPT, disable_web_page_preview=True)
 
 
-async def message_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def vacancy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     _reset(context)
     context.user_data[STATE_KEY] = STATE_AWAIT_COVER
     await update.message.reply_text(COVER_PROMPT)
@@ -81,7 +81,7 @@ async def message_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     _reset(context)
-    await update.message.reply_text("Ок, отменил. Наберите /portfolio или /message, когда будете готовы.")
+    await update.message.reply_text("Ок, отменил. Наберите /portfolio или /vacancy, когда будете готовы.")
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -146,7 +146,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _handle_cover(update, context, text)
         return
 
-    await message.reply_text("Наберите /portfolio или /message, чтобы начать.")
+    await message.reply_text("Наберите /portfolio или /vacancy, чтобы начать.")
 
 
 async def _handle_resume_link(
@@ -258,7 +258,7 @@ async def _handle_cover(
     # Long letters can exceed one Telegram message; send in ~4000-char chunks.
     for chunk in _split_message(letter, 4000):
         await message.reply_text(chunk)
-    await message.reply_text("Готово. Ещё одно письмо? — /message. Резюме под вакансию — /portfolio.")
+    await message.reply_text("Готово. Ещё одно письмо? — /vacancy. Резюме под вакансию — /portfolio.")
 
 
 def _split_message(text: str, size: int) -> list[str]:
@@ -297,7 +297,7 @@ def build_application(settings: Settings) -> Application:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", start))
     application.add_handler(CommandHandler("portfolio", portfolio))
-    application.add_handler(CommandHandler("message", message_cmd))
+    application.add_handler(CommandHandler("vacancy", vacancy_cmd))
     application.add_handler(CommandHandler("cancel", cancel))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

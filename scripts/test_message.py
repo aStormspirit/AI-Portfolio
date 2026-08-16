@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local runner for /message cover-letter generation.
+"""Local runner for /vacancy cover-letter generation.
 
 Examples:
   make test-message
@@ -32,7 +32,7 @@ def _read_text(path: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Test /message cover letter locally")
+    parser = argparse.ArgumentParser(description="Test /vacancy cover letter locally")
     parser.add_argument(
         "--vacancy",
         type=Path,

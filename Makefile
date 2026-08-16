@@ -48,7 +48,7 @@ run: env ## Run the bot locally (no Docker)
 test: ## Run unit tests (no LLM calls)
 	.venv/bin/pytest -q
 
-test-message: env ## Live /message cover-letter run against sample vacancy
+test-message: env ## Live /vacancy cover-letter run against sample vacancy
 	.venv/bin/python -m scripts.test_message
 
 test-golden: env ## Validate golden cover-letter examples (letters only)
