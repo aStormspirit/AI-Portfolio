@@ -30,6 +30,13 @@ class Settings(BaseSettings):
         description="Optional OpenAI-compatible base URL (e.g. OpenRouter)",
     )
     llm_model: str = "gpt-4o-mini"
+    openai_reasoning_effort: str = Field(
+        default="",
+        description=(
+            "Reasoning effort for reasoning models (e.g. gpt-5): "
+            "minimal|low|medium|high. Empty disables the parameter."
+        ),
+    )
 
     # Cover letter (/vacancy)
     cover_letter_temperature: float = Field(

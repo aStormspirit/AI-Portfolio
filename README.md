@@ -60,7 +60,8 @@ cp .env.example .env
 | `RXRESUME_BASE_URL` | Базовый URL API | `https://rxresu.me/api/openapi` |
 | `RXRESUME_AI_PROVIDER_ID` | ID AI-провайдера для парсинга PDF | пусто (по умолчанию) |
 | `OPENAI_BASE_URL` | Базовый URL LLM (для OpenRouter) | авто для `sk-or-…` |
-| `LLM_MODEL` | Модель LLM | `gpt-4o-mini` |
+| `LLM_MODEL` | Модель LLM (для GPT-5 через OpenRouter: `openai/gpt-5`) | `gpt-4o-mini` |
+| `OPENAI_REASONING_EFFORT` | Reasoning effort для reasoning-моделей (`gpt-5`): `minimal`/`low`/`medium`/`high` | пусто |
 | `COVER_LETTER_TEMPERATURE` | Temperature для `/vacancy` | `0.55` |
 | `COVER_LETTER_MAX_TOKENS` | Max tokens для `/vacancy` | `900` |
 | `COVER_LETTER_GOLDEN_LIMIT` | Сколько golden-примеров в few-shot | `3` |

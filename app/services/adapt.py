@@ -251,6 +251,13 @@ class ResumeAdapter:
         base_url = settings.resolved_openai_base_url
         if base_url:
             kwargs["base_url"] = base_url
+        # Reasoning models (e.g. gpt-5) spend part of the output-token budget on
+        # hidden reasoning. Constrain that effort so replies aren't consumed by it
+        # (an unconstrained gpt-5 can burn the whole cover-letter budget reasoning).
+        if settings.openai_reasoning_effort:
+            kwargs["extra_body"] = {
+                "reasoning": {"effort": settings.openai_reasoning_effort}
+            }
         self._llm = ChatOpenAI(**kwargs)
         self._cover_llm = ChatOpenAI(
             **{
@@ -361,7 +368,13 @@ class ResumeAdapter:
 
 
 def _response_text(result: Any, *, empty_error: str) -> str:
-    text = getattr(result, "content", None) or str(result)
+    # For chat messages use `.content` verbatim (even if empty) so a reply whose
+    # tokens were fully consumed by reasoning surfaces the friendly empty error
+    # instead of leaking the raw message object repr via str(result).
+    if hasattr(result, "content"):
+        text = result.content
+    else:
+        text = str(result)
     if isinstance(text, list):
         text = "".join(
             part.get("text", "") if isinstance(part, dict) else str(part)
