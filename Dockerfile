@@ -13,5 +13,6 @@ RUN pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY tests/fixtures/golden ./tests/fixtures/golden
 
 CMD ["python", "-m", "app.bot"]

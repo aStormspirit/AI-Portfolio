@@ -1,11 +1,11 @@
-.PHONY: help install env up down build rebuild logs restart ps shell run stop clean
+.PHONY: help install env up down build rebuild logs restart ps shell run stop clean test test-message test-golden
 
 COMPOSE ?= docker compose
 export DOCKER_BUILDKIT ?= 1
 export COMPOSE_DOCKER_CLI_BUILD ?= 1
 
 help: ## Show available commands
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 install: ## Create venv and install Python dependencies
 	python3 -m venv .venv
@@ -44,6 +44,15 @@ shell: ## Open a shell in the running container
 
 run: env ## Run the bot locally (no Docker)
 	.venv/bin/python -m app.bot
+
+test: ## Run unit tests (no LLM calls)
+	.venv/bin/pytest -q
+
+test-message: env ## Live /message cover-letter run against sample vacancy
+	.venv/bin/python -m scripts.test_message
+
+test-golden: env ## Validate golden cover-letter examples (letters only)
+	.venv/bin/python -m scripts.eval_golden
 
 stop: down ## Alias for down
 

@@ -9,8 +9,11 @@ services:
       RXRESUME_AI_PROVIDER_ID: ${RXRESUME_AI_PROVIDER_ID:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      COVER_LETTER_TEMPERATURE: ${COVER_LETTER_TEMPERATURE:-0.55}
+      COVER_LETTER_MAX_TOKENS: ${COVER_LETTER_MAX_TOKENS:-900}
       MAX_PDF_SIZE_MB: ${MAX_PDF_SIZE_MB:-15}
     volumes:
       - ./app:/app/app
+      - ./tests/fixtures/golden:/app/tests/fixtures/golden:ro
     command: ["python", "-m", "app.bot"]
     restart: unless-stopped
