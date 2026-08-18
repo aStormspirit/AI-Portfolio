@@ -1,5 +1,7 @@
 # Resume → Vacancy → Reactive Resume Telegram Bot
 
+[![Deploy to EC2](https://github.com/aStormspirit/AI-Portfolio/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/aStormspirit/AI-Portfolio/actions/workflows/deploy.yml)
+
 Телеграм-бот: отправляете `/portfolio`, присылаете резюме (ссылку из
 [Reactive Resume](https://rxresu.me) или PDF), затем текст вакансии — бот
 адаптирует резюме под вакансию через LLM и загружает **новое** резюме в ваш
