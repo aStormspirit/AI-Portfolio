@@ -100,9 +100,9 @@ def test_generate_client_message_uses_task() -> None:
         captured["payload"] = payload
         return SimpleNamespace(
             content=(
-                "Здравствуйте! Могу взять backend для записи клиентов на FastAPI "
-                "и Telegram-уведомления вместо Excel — [релевантный кейс]. "
-                "Готов коротко созвониться: [Telegram]."
+                "Здравствуйте! Могу собрать сквозную воронку Instagram → Telegram → GetCourse "
+                "с оплатой и возвратом отвалившихся на каждом шаге — без потери заявок. "
+                "Делал похожие проекты [релевантный кейс]; обсудим план на коротком созвоне: [Telegram]."
             )
         )
 
