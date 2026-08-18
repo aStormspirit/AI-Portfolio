@@ -109,6 +109,43 @@ auto-restarts on crash and on reboot.
 
 ## Updating later
 
+### Automatic (GitHub Actions → EC2)
+
+On every push to `main`, [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)
+SSHs into the instance, runs [`deploy/update.sh`](update.sh) (`git pull` +
+`systemctl restart portfolio-bot`), and keeps the server `.env` untouched.
+
+**One-time setup**
+
+1. On the EC2 box the app must already live at `/opt/portfolio-bot` as a **git
+   clone** of this repo (see step 3), with a working `.env` and
+   `portfolio-bot` systemd unit enabled.
+2. Give the instance read access to the repo for `git pull`:
+   - add a **read-only deploy key** to the GitHub repo, or
+   - keep a fine-grained PAT in the remote URL (less ideal).
+3. In the GitHub repo → **Settings → Secrets and variables → Actions** create:
+
+| Secret | Example | Required |
+|---|---|---|
+| `EC2_HOST` | `18.184.x.x` or DNS | yes |
+| `EC2_SSH_PRIVATE_KEY` | full PEM of the key that can SSH as `ec2-user` | yes |
+| `EC2_USER` | `ec2-user` | no (default `ec2-user`) |
+| `EC2_PORT` | `22` | no (default `22`) |
+
+4. Allow SSH from GitHub Actions to the instance. Easiest for a small bot:
+   temporarily allow `0.0.0.0/22` only from your IP is not enough for Actions —
+   either open port 22 to `0.0.0.0/0` (lock down with key-only auth), use an
+   SSM/bastion setup, or restrict to [GitHub Actions IP ranges](https://api.github.com/meta).
+5. Push to `main` or run the workflow manually (**Actions → Deploy to EC2 → Run workflow**).
+
+Watch the run in the Actions tab; on the server:
+
+```bash
+journalctl -u portfolio-bot -f
+```
+
+### Manual
+
 ```bash
 ssh ec2-user@<PUBLIC_IP>
 cd /opt/portfolio-bot && git pull   # or rsync again

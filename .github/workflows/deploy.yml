@@ -1,0 +1,61 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ec2-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy bot to AWS EC2
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -euo pipefail
+          test -n "${SSH_KEY:-}" || { echo "Missing secret EC2_SSH_PRIVATE_KEY"; exit 1; }
+          test -n "${EC2_HOST:-}" || { echo "Missing secret EC2_HOST"; exit 1; }
+          USER_NAME="${EC2_USER:-ec2-user}"
+          PORT="${EC2_PORT:-22}"
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/ec2_deploy_key
+          chmod 600 ~/.ssh/ec2_deploy_key
+
+          ssh-keyscan -p "$PORT" -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          cat > ~/.ssh/config <<EOF
+          Host portfolio-ec2
+            HostName ${EC2_HOST}
+            User ${USER_NAME}
+            Port ${PORT}
+            IdentityFile ~/.ssh/ec2_deploy_key
+            StrictHostKeyChecking accept-new
+            ServerAliveInterval 30
+            ServerAliveCountMax 10
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Upload deploy script
+        run: |
+          scp deploy/update.sh portfolio-ec2:/tmp/portfolio-bot-update.sh
+          ssh portfolio-ec2 'chmod +x /tmp/portfolio-bot-update.sh'
+
+      - name: Pull and restart on EC2
+        run: |
+          ssh portfolio-ec2 'APP_DIR=/opt/portfolio-bot DEPLOY_BRANCH=main /tmp/portfolio-bot-update.sh'
